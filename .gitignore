@@ -1,0 +1,10 @@
+*.exe
+*.out
+/bin/
+.idea/
+.vscode/
+*.tmp
+*.log
+users.json
+*.env
+dotaward-bot
