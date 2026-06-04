@@ -29,7 +29,11 @@ func main() {
 
 	b.Use(func(next telebot.HandlerFunc) telebot.HandlerFunc {
 		return func(c telebot.Context) error {
-			log.Printf("[%d] @%s: %s", c.Sender().ID, c.Sender().Username, c.Text())
+			if c.Callback() != nil {
+				log.Printf("[%d] @%s: %s", c.Sender().ID, c.Sender().Username, c.Callback().Data)
+			} else {
+				log.Printf("[%d] @%s: %s", c.Sender().ID, c.Sender().Username, c.Text())
+			}
 			err := next(c)
 			if err != nil {
 				log.Printf("handler error: %v", err)
@@ -43,7 +47,10 @@ func main() {
 	})
 
 	b.Handle("/register", h.Register)
+	b.Handle("/profile", h.Profile)
+	b.Handle(&telebot.InlineButton{Unique: "profile"}, h.HandleCallBack)
 	b.Handle("/lastmatch", h.LastMatch)
+	b.Handle(&telebot.InlineButton{Unique: "lastmatch"}, h.HandleCallBack)
 	b.Handle("/help", h.Help)
 
 	log.Println("Бот запущен")

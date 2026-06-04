@@ -3,6 +3,7 @@ package opendota
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -17,6 +18,23 @@ func NewClient() *Client {
 	return &Client{
 		http: &http.Client{Timeout: 10 * time.Second},
 	}
+}
+
+type Profile struct {
+	AccountID   int64  `json:"account_id"`
+	Personaname string `json:"personaname"`
+	Avatar      string `json:"avatarfull"`
+}
+
+type WinLose struct {
+	Win  int `json:"win"`
+	Lose int `json:"lose"`
+}
+
+type PlayerProfile struct {
+	Profile  `json:"profile"`
+	RankTier int `json:"rank_tier"`
+	WinLose
 }
 
 type RecentMatch struct {
@@ -51,4 +69,31 @@ func (c *Client) GetRecentMatch(accountID int64) (*RecentMatch, error) {
 	}
 
 	return &matches[0], nil
+}
+
+func (c *Client) GetProfile(accountID int64) (*PlayerProfile, error) {
+	resp, err := c.http.Get(fmt.Sprintf("%s/players/%d", baseURL, accountID))
+	if err != nil {
+		log.Printf("error resp GetProfile: %v", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var profile PlayerProfile
+	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
+		return nil, err
+	}
+
+	resp2, err := c.http.Get(fmt.Sprintf("%s/players/%d/wl", baseURL, accountID))
+	if err != nil {
+		log.Printf("error resp2 GetProfile: %v", err)
+		return nil, err
+	}
+	defer resp2.Body.Close()
+
+	if err := json.NewDecoder(resp2.Body).Decode(&profile.WinLose); err != nil {
+		return nil, err
+	}
+
+	return &profile, nil
 }

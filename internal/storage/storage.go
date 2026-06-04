@@ -2,11 +2,14 @@ package storage
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
 	"strings"
 	"sync"
 )
+
+var ErrAlreadyRegistered = errors.New("user already registered")
 
 type User struct {
 	AccountID int64  `json:"account_id"`
@@ -28,11 +31,15 @@ func New(path string) *Storage {
 	return s
 }
 
-func (s *Storage) Register(telegramID, accountID int64, username string) {
+func (s *Storage) Register(telegramID, accountID int64, username string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, exists := s.users[telegramID]; exists {
+		return ErrAlreadyRegistered
+	}
+
 	s.users[telegramID] = User{AccountID: accountID, Username: username}
-	s.save()
+	return s.save()
 }
 
 func (s *Storage) GetAccountID(telegramID int64) (int64, bool) {
