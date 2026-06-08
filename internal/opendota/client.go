@@ -3,7 +3,6 @@ package opendota
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 )
@@ -38,16 +37,17 @@ type PlayerProfile struct {
 }
 
 type RecentMatch struct {
-	MatchID  int64 `json:"match_id"`
-	Kills    int   `json:"kills"`
-	Deaths   int   `json:"deaths"`
-	Assists  int   `json:"assists"`
-	HeroID   int   `json:"hero_id"`
-	Win      int   `json:"win"`
-	Duration int   `json:"duration"`
-	LastHits int   `json:"last_hits"`
-	GPM      int   `json:"gold_per_min"`
-	XPM      int   `json:"xp_per_min"`
+	MatchID    int64 `json:"match_id"`
+	PlayerSlot int   `json:"player_slot"`
+	RadiantWin bool  `json:"radiant_win"`
+	Kills      int   `json:"kills"`
+	Deaths     int   `json:"deaths"`
+	Assists    int   `json:"assists"`
+	HeroID     int   `json:"hero_id"`
+	Duration   int   `json:"duration"`
+	LastHits   int   `json:"last_hits"`
+	GPM        int   `json:"gold_per_min"`
+	XPM        int   `json:"xp_per_min"`
 }
 
 func (c *Client) GetRecentMatch(accountID int64) (*RecentMatch, error) {
@@ -71,10 +71,30 @@ func (c *Client) GetRecentMatch(accountID int64) (*RecentMatch, error) {
 	return &matches[0], nil
 }
 
+func (c *Client) GetRecentMatches(accountID int64, limit int) ([]RecentMatch, error) {
+	url := fmt.Sprintf("%s/players/%d/recentMatches", baseURL, accountID)
+
+	resp, err := c.http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var matches []RecentMatch
+	if err := json.NewDecoder(resp.Body).Decode(&matches); err != nil {
+		return nil, err
+	}
+
+	if len(matches) > limit {
+		matches = matches[:limit]
+	}
+
+	return matches, nil
+}
+
 func (c *Client) GetProfile(accountID int64) (*PlayerProfile, error) {
 	resp, err := c.http.Get(fmt.Sprintf("%s/players/%d", baseURL, accountID))
 	if err != nil {
-		log.Printf("error resp GetProfile: %v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -86,7 +106,6 @@ func (c *Client) GetProfile(accountID int64) (*PlayerProfile, error) {
 
 	resp2, err := c.http.Get(fmt.Sprintf("%s/players/%d/wl", baseURL, accountID))
 	if err != nil {
-		log.Printf("error resp2 GetProfile: %v", err)
 		return nil, err
 	}
 	defer resp2.Body.Close()

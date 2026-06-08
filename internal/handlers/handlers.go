@@ -20,6 +20,7 @@ type UserStorage interface {
 
 type DotaClient interface {
 	GetRecentMatch(accountID int64) (*opendota.RecentMatch, error)
+	GetRecentMatches(accountID int64, limit int) ([]opendota.RecentMatch, error)
 	GetProfile(accountID int64) (*opendota.PlayerProfile, error)
 }
 
@@ -67,6 +68,7 @@ func (h *Handler) Profile(c telebot.Context) error {
 func (h *Handler) sendProfile(c telebot.Context, accountID int64) error {
 	profile, err := h.dotaClient.GetProfile(accountID)
 	if err != nil {
+		log.Printf("GetProfile error: %v", err)
 		return c.Reply("Не удалось получить профиль")
 	}
 
@@ -133,16 +135,21 @@ func (h *Handler) LastMatch(c telebot.Context) error {
 func (h *Handler) sendLastMatch(c telebot.Context, accountID int64) error {
 	profile, err := h.dotaClient.GetProfile(accountID)
 	if err != nil {
+		log.Printf("GetProfile error: %v", err)
 		return c.Reply("Ошибка получения профиля")
 	}
 
 	match, err := h.dotaClient.GetRecentMatch(accountID)
 	if err != nil {
-		return c.Reply("Не удалось получить матч")
+		log.Printf("GetRecentMatch error: %v", err)
+		return c.Reply(fmt.Sprintf("Не удалось получить матч игрока %s", profile.Personaname))
 	}
 
+	isRadiant := match.PlayerSlot < 128
+	win := (match.RadiantWin && isRadiant) || (!match.RadiantWin && !isRadiant)
+
 	result := "✅ Победа"
-	if match.Win == 0 {
+	if !win {
 		result = "❌ Поражение"
 	}
 
@@ -175,6 +182,47 @@ func (h *Handler) sendLastMatch(c telebot.Context, accountID int64) error {
 	return c.Send(msg, markup)
 }
 
+func (h *Handler) Streak(c telebot.Context) error {
+	accountID, ok := h.storage.GetAccountID(c.Sender().ID)
+	if !ok {
+		return c.Reply("Вы не зарегистированы. Используйте /register <dota_account_id>")
+	}
+
+	matches, err := h.dotaClient.GetRecentMatches(accountID, 20)
+	if err != nil {
+		log.Printf("GetRecentMatches error: %v", err)
+		return c.Reply("Не удалсоь получить матчи")
+	}
+
+	if len(matches) == 0 {
+		return c.Reply("Матчи не найдены")
+	}
+
+	streak, win := opendota.CalcStreak(matches)
+
+	statusEmoji := "🔥"
+	status := "победа"
+	if streak > 1 {
+		status = "победы"
+	}
+	if streak >= 5 {
+		status = "побед"
+	}
+
+	if !win {
+		statusEmoji = "☠️"
+		status = "поражение"
+		if streak > 1 {
+			status = "поражения"
+		}
+		if streak >= 5 {
+			status = "поражений"
+		}
+	}
+
+	return c.Reply(fmt.Sprintf("%s Серия: %d %s подряд", statusEmoji, streak, status))
+}
+
 func (h *Handler) Help(c telebot.Context) error {
 	msg := "📖 Команды бота:\n\n" +
 		"/register <dota_account_id> - привязать свой аккаунт\n" +
@@ -184,6 +232,7 @@ func (h *Handler) Help(c telebot.Context) error {
 		"  └ без аргументов - твой матч\n" +
 		"  └ @username - матч конкретного пользователя\n" +
 		"  └ ответом на сообщение - матч того на кого ответил\n\n" +
+		"/streak - серия побед/поражений\n\n" +
 		"/help - это сообщение"
 	return c.Reply(msg)
 }
@@ -206,7 +255,6 @@ func (h *Handler) HandleCallBack(c telebot.Context) error {
 		}
 
 		_ = c.Respond()
-		_ = c.Delete()
 		return h.sendLastMatch(c, accountID)
 
 	case "profile":

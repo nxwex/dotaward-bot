@@ -78,4 +78,5 @@ func (s *Storage) load() {
 	if err := json.Unmarshal(data, &s.users); err != nil {
 		log.Printf("ошибка загрузки storage: %v", err)
 	}
+	log.Printf("user storage loaded: %d users.", len(s.users))
 }

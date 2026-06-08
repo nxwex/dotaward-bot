@@ -13,6 +13,8 @@ import (
 )
 
 func main() {
+	log.Printf("starting bot...")
+
 	pref := telebot.Settings{
 		Token:  os.Getenv("BOT_TOKEN"),
 		Poller: &telebot.LongPoller{Timeout: 10 * time.Second},
@@ -51,8 +53,9 @@ func main() {
 	b.Handle(&telebot.InlineButton{Unique: "profile"}, h.HandleCallBack)
 	b.Handle("/lastmatch", h.LastMatch)
 	b.Handle(&telebot.InlineButton{Unique: "lastmatch"}, h.HandleCallBack)
+	b.Handle("/streak", h.Streak)
 	b.Handle("/help", h.Help)
 
-	log.Println("Бот запущен")
+	log.Println("bot is running")
 	b.Start()
 }
