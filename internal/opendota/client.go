@@ -53,14 +53,8 @@ type RecentMatch struct {
 func (c *Client) GetRecentMatch(accountID int64) (*RecentMatch, error) {
 	url := fmt.Sprintf("%s/players/%d/recentMatches", baseURL, accountID)
 
-	resp, err := c.http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
 	var matches []RecentMatch
-	if err := json.NewDecoder(resp.Body).Decode(&matches); err != nil {
+	if err := c.get(url, &matches); err != nil {
 		return nil, err
 	}
 
@@ -72,47 +66,43 @@ func (c *Client) GetRecentMatch(accountID int64) (*RecentMatch, error) {
 }
 
 func (c *Client) GetRecentMatches(accountID int64, limit int) ([]RecentMatch, error) {
-	url := fmt.Sprintf("%s/players/%d/recentMatches", baseURL, accountID)
-
-	resp, err := c.http.Get(url)
-	if err != nil {
-		return nil, err
+	url := fmt.Sprintf("%s/players/%d/matches", baseURL, accountID)
+	if limit > 0 {
+		url += fmt.Sprintf("?limit=%d", limit)
 	}
-	defer resp.Body.Close()
 
 	var matches []RecentMatch
-	if err := json.NewDecoder(resp.Body).Decode(&matches); err != nil {
+	if err := c.get(url, &matches); err != nil {
 		return nil, err
-	}
-
-	if len(matches) > limit {
-		matches = matches[:limit]
 	}
 
 	return matches, nil
 }
 
 func (c *Client) GetProfile(accountID int64) (*PlayerProfile, error) {
-	resp, err := c.http.Get(fmt.Sprintf("%s/players/%d", baseURL, accountID))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
 	var profile PlayerProfile
-	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
+
+	if err := c.get(fmt.Sprintf("%s/players/%d", baseURL, accountID), &profile); err != nil {
 		return nil, err
 	}
 
-	resp2, err := c.http.Get(fmt.Sprintf("%s/players/%d/wl", baseURL, accountID))
-	if err != nil {
-		return nil, err
-	}
-	defer resp2.Body.Close()
-
-	if err := json.NewDecoder(resp2.Body).Decode(&profile.WinLose); err != nil {
+	if err := c.get(fmt.Sprintf("%s/players/%d/wl", baseURL, accountID), &profile.WinLose); err != nil {
 		return nil, err
 	}
 
 	return &profile, nil
+}
+
+func (c *Client) get(url string, v any) error {
+	resp, err := c.http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("opendota api error: %d", resp.StatusCode)
+	}
+
+	return json.NewDecoder(resp.Body).Decode(v)
 }

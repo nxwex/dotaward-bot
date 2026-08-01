@@ -7,15 +7,21 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nxwex/dotaward-bot/internal/models"
 	"github.com/nxwex/dotaward-bot/internal/opendota"
-	"github.com/nxwex/dotaward-bot/internal/storage"
+	"github.com/nxwex/dotaward-bot/internal/repository"
 	"gopkg.in/telebot.v3"
 )
 
+const (
+	callbackLastMatch = "lastmatch"
+	callbackProfile   = "profile"
+)
+
 type UserStorage interface {
-	Register(telegramID, accountID int64, username string) error
-	GetAccountID(telegramID int64) (int64, bool)
-	GetAccountIDByUsername(username string) (int64, bool)
+	Save(u *models.User) (int64, error)
+	GetDotaID(telegramID int64) (int64, bool)
+	GetDotaIDByUsername(username string) (int64, bool)
 }
 
 type DotaClient interface {
@@ -44,13 +50,18 @@ func (h *Handler) Register(c telebot.Context) error {
 		return c.Reply("account_id должен быть числом")
 	}
 
-	if err = h.storage.Register(c.Sender().ID, accountID, c.Sender().Username); err != nil {
-		if errors.Is(err, storage.ErrAlreadyRegistered) {
+	user := &models.User{
+		TelegramID:   c.Sender().ID,
+		DotaID:       accountID,
+		TelegramName: c.Sender().Username,
+	}
+
+	if _, err = h.storage.Save(user); err != nil {
+		if errors.Is(err, repository.ErrAlreadyRegistered) {
 			return c.Reply("Вы уже зарегистрированы!")
-		} else {
-			log.Printf("error register user: %v", err)
-			return c.Reply("Неизвестная ошибка")
 		}
+		log.Printf("error register user: %v", err)
+		return c.Reply("Неизвестная ошибка")
 	}
 
 	log.Printf("[bot] register: @%s telegram: %d, dota: %d", c.Sender().Username, c.Sender().ID, accountID)
@@ -58,15 +69,15 @@ func (h *Handler) Register(c telebot.Context) error {
 }
 
 func (h *Handler) Profile(c telebot.Context) error {
-	accountID, ok := h.storage.GetAccountID(c.Sender().ID)
+	dotaID, ok := h.storage.GetDotaID(c.Sender().ID)
 	if !ok {
 		return c.Reply("Ты не зарегистрирован. Используй /register <dota_account_id>")
 	}
-	return h.sendProfile(c, accountID)
+	return h.sendProfile(c, dotaID)
 }
 
-func (h *Handler) sendProfile(c telebot.Context, accountID int64) error {
-	profile, err := h.dotaClient.GetProfile(accountID)
+func (h *Handler) sendProfile(c telebot.Context, dotaID int64) error {
+	profile, err := h.dotaClient.GetProfile(dotaID)
 	if err != nil {
 		log.Printf("GetProfile error: %v", err)
 		return c.Reply("Не удалось получить профиль")
@@ -92,9 +103,9 @@ func (h *Handler) sendProfile(c telebot.Context, accountID int64) error {
 		profile.Win, profile.Lose, winRate)
 
 	markup := &telebot.ReplyMarkup{}
-	btnLastMatch := markup.Data("Последний матч", "lastmatch", fmt.Sprintf("lastmatch:%d", accountID))
-	btnDotabuff := markup.URL("Dotabuff", fmt.Sprintf("https://ru.dotabuff.com/players/%d", accountID))
-	btnOpenDota := markup.URL("OpenDota", fmt.Sprintf("https://opendota.com/players/%d", accountID))
+	btnLastMatch := markup.Data("Последний матч", callbackLastMatch, fmt.Sprintf("lastmatch:%d", dotaID))
+	btnDotabuff := markup.URL("Dotabuff", fmt.Sprintf("https://dotabuff.com/%d", dotaID))
+	btnOpenDota := markup.URL("OpenDota", fmt.Sprintf("https://opendota.com/%d", dotaID))
 	markup.Inline(
 		markup.Row(btnLastMatch),
 		markup.Row(btnDotabuff, btnOpenDota),
@@ -108,19 +119,19 @@ func (h *Handler) sendProfile(c telebot.Context, accountID int64) error {
 }
 
 func (h *Handler) LastMatch(c telebot.Context) error {
-	var accountID int64
+	var dotaID int64
 	var ok bool
 	var username string
 
 	switch {
 	case c.Message().ReplyTo != nil:
-		accountID, ok = h.storage.GetAccountID(c.Message().ReplyTo.Sender.ID)
+		dotaID, ok = h.storage.GetDotaID(c.Message().ReplyTo.Sender.ID)
 		username = c.Message().ReplyTo.Sender.FirstName
 	case len(c.Args()) > 0:
-		accountID, ok = h.storage.GetAccountIDByUsername(c.Args()[0])
+		dotaID, ok = h.storage.GetDotaIDByUsername(c.Args()[0])
 		username = c.Args()[0]
 	default:
-		accountID, ok = h.storage.GetAccountID(c.Sender().ID)
+		dotaID, ok = h.storage.GetDotaID(c.Sender().ID)
 		username = c.Sender().FirstName
 	}
 
@@ -128,18 +139,18 @@ func (h *Handler) LastMatch(c telebot.Context) error {
 		return c.Reply("Пользователь не зарегистрирован")
 	}
 
-	log.Printf("[bot] lastmatch: %s (account: %d) -> @%s", username, accountID, c.Sender().Username)
-	return h.sendLastMatch(c, accountID)
+	log.Printf("[bot] lastmatch: %s (account: %d) -> @%s", username, dotaID, c.Sender().Username)
+	return h.sendLastMatch(c, dotaID)
 }
 
-func (h *Handler) sendLastMatch(c telebot.Context, accountID int64) error {
-	profile, err := h.dotaClient.GetProfile(accountID)
+func (h *Handler) sendLastMatch(c telebot.Context, dotaID int64) error {
+	profile, err := h.dotaClient.GetProfile(dotaID)
 	if err != nil {
 		log.Printf("GetProfile error: %v", err)
 		return c.Reply("Ошибка получения профиля")
 	}
 
-	match, err := h.dotaClient.GetRecentMatch(accountID)
+	match, err := h.dotaClient.GetRecentMatch(dotaID)
 	if err != nil {
 		log.Printf("GetRecentMatch error: %v", err)
 		return c.Reply(fmt.Sprintf("Не удалось получить матч игрока %s", profile.Personaname))
@@ -176,22 +187,22 @@ func (h *Handler) sendLastMatch(c telebot.Context, accountID int64) error {
 		match.MatchID)
 
 	markup := &telebot.ReplyMarkup{}
-	btnProfile := markup.Data("Профиль игрока", "profile", fmt.Sprintf("profile:%d", accountID))
+	btnProfile := markup.Data("Профиль игрока", callbackProfile, fmt.Sprintf("profile:%d", dotaID))
 	markup.Inline(markup.Row(btnProfile))
 
 	return c.Send(msg, markup)
 }
 
 func (h *Handler) Streak(c telebot.Context) error {
-	accountID, ok := h.storage.GetAccountID(c.Sender().ID)
+	dotaID, ok := h.storage.GetDotaID(c.Sender().ID)
 	if !ok {
-		return c.Reply("Вы не зарегистированы. Используйте /register <dota_account_id>")
+		return c.Reply("Вы не зарегистрированы. Используйте /register <dota_account_id>")
 	}
 
-	matches, err := h.dotaClient.GetRecentMatches(accountID, 20)
+	matches, err := h.dotaClient.GetRecentMatches(dotaID, 20)
 	if err != nil {
 		log.Printf("GetRecentMatches error: %v", err)
-		return c.Reply("Не удалсоь получить матчи")
+		return c.Reply("Не удалось получить матчи")
 	}
 
 	if len(matches) == 0 {
@@ -223,6 +234,24 @@ func (h *Handler) Streak(c telebot.Context) error {
 	return c.Reply(fmt.Sprintf("%s Серия: %d %s подряд", statusEmoji, streak, status))
 }
 
+func (h *Handler) MaxStreak(c telebot.Context) error {
+	dotaID, ok := h.storage.GetDotaID(c.Sender().ID)
+	if !ok {
+		return c.Reply("Вы не зарегистрированы. Используйте /register <dota_account_id>")
+	}
+
+	matches, err := h.dotaClient.GetRecentMatches(dotaID, 0)
+	if err != nil {
+		log.Printf("GetRecentMatches error: %v", err)
+		return c.Reply("Не удалось получить матчи")
+	}
+
+	maxWin, maxLoss := opendota.CalcMaxStreak(matches)
+	msg := fmt.Sprintf("📊 Серия за все время:\n\n🔥 Побед подряд: %d\n☠️ Поражений подряд: %d\n⏱️ Всего матчей: %d", maxWin, maxLoss, len(matches))
+
+	return c.Reply(msg)
+}
+
 func (h *Handler) Help(c telebot.Context) error {
 	msg := "📖 Команды бота:\n\n" +
 		"/register <dota_account_id> - привязать свой аккаунт\n" +
@@ -233,7 +262,13 @@ func (h *Handler) Help(c telebot.Context) error {
 		"  └ @username - матч конкретного пользователя\n" +
 		"  └ ответом на сообщение - матч того на кого ответил\n\n" +
 		"/streak - серия побед/поражений\n\n" +
+		"/maxstreak - серия за все время\n\n" +
 		"/help - это сообщение"
+	return c.Reply(msg)
+}
+
+func (h *Handler) Start(c telebot.Context) error {
+	msg := fmt.Sprintf("Привет, %s!\n\nИспользуй /register <account_id>, чтобы привязать аккаунт.\n\nПосмотреть все доступные команды: /help", c.Sender().FirstName)
 	return c.Reply(msg)
 }
 
@@ -248,7 +283,7 @@ func (h *Handler) HandleCallBack(c telebot.Context) error {
 	action, value := parts[0], parts[1]
 
 	switch action {
-	case "lastmatch":
+	case callbackLastMatch:
 		accountID, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return c.Respond()
@@ -257,7 +292,7 @@ func (h *Handler) HandleCallBack(c telebot.Context) error {
 		_ = c.Respond()
 		return h.sendLastMatch(c, accountID)
 
-	case "profile":
+	case callbackProfile:
 		accountID, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return c.Respond()

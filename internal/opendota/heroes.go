@@ -9,7 +9,7 @@ var Heroes = map[int]string{
 	27: "Shadow Shaman", 28: "Slardar", 29: "Tidehunter", 30: "Witch Doctor",
 	31: "Lich", 32: "Riki", 33: "Enigma", 34: "Tinker", 35: "Sniper",
 	36: "Necrophos", 37: "Warlock", 38: "Beastmaster", 39: "Queen of Pain", 40: "Venomancer",
-	41: "Faceless Void", 42: "Skeleton King", 43: "Death Prophet", 44: "Phantom Assassin",
+	41: "Faceless Void", 42: "Wraith King", 43: "Death Prophet", 44: "Phantom Assassin",
 	45: "Pugna", 46: "Templar Assassin", 47: "Viper", 48: "Luna", 49: "Dragon Knight",
 	50: "Dazzle", 51: "Clockwerk", 52: "Leshrac", 53: "Nature's Prophet", 54: "Lifestealer",
 	55: "Dark Seer", 56: "Clinkz", 57: "Omniknight", 58: "Enchantress", 59: "Huskar",
