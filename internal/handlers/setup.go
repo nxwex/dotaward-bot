@@ -9,13 +9,17 @@ func (h *Handler) Setup(b *telebot.Bot) {
 
 	b.Handle("/start", h.Start)
 	b.Handle("/register", h.Register)
+
 	b.Handle("/profile", h.Profile)
 	b.Handle(&telebot.InlineButton{Unique: "profile"}, h.HandleCallBack)
 	b.Handle("/lastmatch", h.LastMatch)
 	b.Handle(&telebot.InlineButton{Unique: "lastmatch"}, h.HandleCallBack)
+
 	b.Handle("/streak", h.Streak)
 	b.Handle("/maxstreak", h.MaxStreak)
 	b.Handle("/help", h.Help)
+
 	b.Handle("/why", h.Why)
 	b.Handle(telebot.OnText, h.HandleText)
+	b.Handle("/clear", h.Clear)
 }

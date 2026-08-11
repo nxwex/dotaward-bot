@@ -36,6 +36,8 @@ type MatchContextStorage interface {
 	SaveMatchContext(ctx *models.MatchContext) error
 	GetMatchContext(chatID int64, messageID int) (*models.MatchContext, error)
 	GetMatchHistory(chatID int64, messageID int) ([]*models.MatchContext, error)
+	GetMatchContexts(chatID int64) ([]*models.MatchContext, error)
+	DeleteMatchContexts(chatID int64) error
 }
 
 type AIClient interface {

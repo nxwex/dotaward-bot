@@ -177,3 +177,51 @@ func (d *DB) GetMatchHistory(chatID int64, messageID int) ([]*models.MatchContex
 
 	return history, nil
 }
+
+func (d *DB) GetMatchContexts(chatID int64) ([]*models.MatchContext, error) {
+	rows, err := d.db.Query(
+		`SELECT id, chat_id, message_id, parent_message_id, match_id, question, answer, match_data, created_at, expires_at
+		 FROM match_contexts
+		 WHERE chat_id = ?`,
+		chatID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var contexts []*models.MatchContext
+
+	for rows.Next() {
+		a := &models.MatchContext{}
+
+		err := rows.Scan(
+			&a.ID,
+			&a.ChatID,
+			&a.MessageID,
+			&a.ParentMessageID,
+			&a.MatchID,
+			&a.Question,
+			&a.Answer,
+			&a.MatchData,
+			&a.CreatedAt,
+			&a.ExpiresAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		contexts = append(contexts, a)
+	}
+
+	return contexts, rows.Err()
+}
+
+func (d *DB) DeleteMatchContexts(chatID int64) error {
+	_, err := d.db.Exec(
+		`DELETE FROM match_contexts WHERE chat_id = ?`,
+		chatID,
+	)
+
+	return err
+}
