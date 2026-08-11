@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -28,15 +29,32 @@ type DotaClient interface {
 	GetRecentMatch(accountID int64) (*opendota.RecentMatch, error)
 	GetRecentMatches(accountID int64, limit int) ([]opendota.RecentMatch, error)
 	GetProfile(accountID int64) (*opendota.PlayerProfile, error)
+	GetMatch(matchID int64) (*opendota.Match, error)
+}
+
+type MatchContextStorage interface {
+	SaveMatchContext(ctx *models.MatchContext) error
+	GetMatchContext(chatID int64, messageID int) (*models.MatchContext, error)
+	GetMatchHistory(chatID int64, messageID int) ([]*models.MatchContext, error)
+}
+
+type AIClient interface {
+	Analyze(ctx context.Context, matchJSON, prevAnalysis, question string) (string, error)
 }
 
 type Handler struct {
 	storage    UserStorage
+	contexts   MatchContextStorage
 	dotaClient DotaClient
+	ai         AIClient
 }
 
-func New(storage UserStorage, dotaClient DotaClient) *Handler {
-	return &Handler{storage: storage, dotaClient: dotaClient}
+func New(storage UserStorage, contexts MatchContextStorage, dotaClient DotaClient, ai AIClient) *Handler {
+	return &Handler{
+		storage:    storage,
+		contexts:   contexts,
+		dotaClient: dotaClient,
+		ai:         ai}
 }
 
 func (h *Handler) Register(c telebot.Context) error {
@@ -263,6 +281,7 @@ func (h *Handler) Help(c telebot.Context) error {
 		"  └ ответом на сообщение - матч того на кого ответил\n\n" +
 		"/streak - серия побед/поражений\n\n" +
 		"/maxstreak - серия за все время\n\n" +
+		"/why - AI анализ матча\n\n" +
 		"/help - это сообщение"
 	return c.Reply(msg)
 }

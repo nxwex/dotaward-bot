@@ -7,5 +7,6 @@
 *.log
 users.json
 users.db
+dotaward.db
 *.env
 dotaward-bot

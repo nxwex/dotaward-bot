@@ -9,8 +9,11 @@ import (
 )
 
 type Config struct {
-	BotToken string
-	DBPath   string
+	BotToken  string
+	DBPath    string
+	AIAPIKey  string
+	AIBaseURL string
+	AIModel   string
 }
 
 func Load() (*Config, error) {
@@ -27,8 +30,26 @@ func Load() (*Config, error) {
 		log.Println("DB_PATH is not set, using default: users.db")
 	}
 
+	aiKey := os.Getenv("AI_API_KEY")
+	if aiKey == "" {
+		log.Println("AI_API_KEY is not set")
+	}
+
+	baseURL := os.Getenv("AI_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://api.openai.com/v1"
+	}
+
+	model := os.Getenv("AI_MODEL")
+	if model == "" {
+		model = "gpt-4o-mini"
+	}
+
 	return &Config{
-		BotToken: token,
-		DBPath:   dbPath,
+		BotToken:  token,
+		DBPath:    dbPath,
+		AIAPIKey:  aiKey,
+		AIBaseURL: baseURL,
+		AIModel:   model,
 	}, nil
 }

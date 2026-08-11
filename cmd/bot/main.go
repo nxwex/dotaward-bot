@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nxwex/dotaward-bot/config"
+	"github.com/nxwex/dotaward-bot/internal/ai"
 	"github.com/nxwex/dotaward-bot/internal/handlers"
 	"github.com/nxwex/dotaward-bot/internal/opendota"
 	"github.com/nxwex/dotaward-bot/internal/repository"
@@ -40,7 +41,8 @@ func main() {
 
 	dotaClient := opendota.NewClient()
 
-	h := handlers.New(db, dotaClient)
+	aiClient := ai.NewClient(cfg.AIAPIKey, cfg.AIBaseURL, cfg.AIModel)
+	h := handlers.New(db, db, dotaClient, aiClient)
 	h.Setup(b) // миддлвар + хендлы
 
 	quit := make(chan os.Signal, 1)

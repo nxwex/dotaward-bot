@@ -43,8 +43,26 @@ func New(path string) (*DB, error) {
 	dota_id INTEGER NOT NULL,
 	telegram_name TEXT NOT NULL COLLATE NOCASE,
 	created_at DATETIME NOT NULL
-	);
+);
 	CREATE INDEX IF NOT EXISTS idx_users_telegram_name ON users(telegram_name);`)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS match_contexts (
+	id                INTEGER PRIMARY KEY AUTOINCREMENT,
+	chat_id           INTEGER NOT NULL,
+	message_id        INTEGER NOT NULL,
+	parent_message_id INTEGER NOT NULL DEFAULT 0,
+	match_id          INTEGER NOT NULL,
+	question          TEXT NOT NULL,
+	answer            TEXT NOT NULL,
+	match_data        TEXT NOT NULL,
+	created_at        DATETIME NOT NULL,
+	expires_at        DATETIME NOT NULL,
+	UNIQUE(chat_id, message_id)
+)`)
 	if err != nil {
 		db.Close()
 		return nil, err
@@ -102,4 +120,60 @@ func (d *DB) GetDotaIDByUsername(username string) (int64, bool) {
 		return 0, false
 	}
 	return dotaID, true
+}
+
+func (d *DB) SaveMatchContext(a *models.MatchContext) error {
+	_, err := d.db.Exec(
+		`INSERT INTO match_contexts (chat_id, message_id, parent_message_id, match_id, question, answer, match_data, created_at, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ChatID, a.MessageID, a.ParentMessageID, a.MatchID, a.Question, a.Answer, a.MatchData, a.CreatedAt, a.ExpiresAt,
+	)
+	return err
+}
+
+func (d *DB) GetMatchContext(chatID int64, messageID int) (*models.MatchContext, error) {
+	a := &models.MatchContext{}
+
+	err := d.db.QueryRow(
+		`SELECT id, chat_id, message_id, parent_message_id, match_id, question, answer, match_data, created_at, expires_at
+		 FROM match_contexts
+		 WHERE chat_id = ? AND message_id = ? AND expires_at > ?`,
+		chatID, messageID, time.Now(),
+	).Scan(
+		&a.ID, &a.ChatID, &a.MessageID, &a.ParentMessageID, &a.MatchID,
+		&a.Question, &a.Answer, &a.MatchData, &a.CreatedAt, &a.ExpiresAt,
+	)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+func (d *DB) GetMatchHistory(chatID int64, messageID int) ([]*models.MatchContext, error) {
+	var history []*models.MatchContext
+
+	currentID := messageID
+
+	for currentID != 0 {
+		a, err := d.GetMatchContext(chatID, currentID)
+		if err != nil {
+			return nil, err
+		}
+		if a == nil {
+			break
+		}
+
+		history = append(history, a)
+		currentID = a.ParentMessageID
+	}
+
+	for i, j := 0, len(history)-1; i < j; i, j = i+1, j-1 {
+		history[i], history[j] = history[j], history[i]
+	}
+
+	return history, nil
 }

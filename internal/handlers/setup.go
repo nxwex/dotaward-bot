@@ -16,4 +16,6 @@ func (h *Handler) Setup(b *telebot.Bot) {
 	b.Handle("/streak", h.Streak)
 	b.Handle("/maxstreak", h.MaxStreak)
 	b.Handle("/help", h.Help)
+	b.Handle("/why", h.Why)
+	b.Handle(telebot.OnText, h.HandleText)
 }
